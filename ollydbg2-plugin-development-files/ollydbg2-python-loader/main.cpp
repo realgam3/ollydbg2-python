@@ -6,6 +6,8 @@
 #include <cstring>
 #include <python.h>
 
+bool FIRST_RUN = TRUE;
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 {
     if(fdwReason == DLL_PROCESS_ATTACH)
@@ -19,7 +21,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 */
 extc int __cdecl ODBG2_Pluginquery(int ollydbgversion, ulong *features, wchar_t pluginname[SHORTNAME], wchar_t pluginversion[SHORTNAME])
 {
-    // Yeah, the plugin interface in the v1/v2 are different
+	// Yeah, the plugin interface in the v1/v2 are different
     if(ollydbgversion < 201)
         return 0;
 
@@ -33,7 +35,31 @@ extc int __cdecl ODBG2_Pluginquery(int ollydbgversion, ulong *features, wchar_t 
 
     Addtolist(0x31337, RED, NAME_PLUGIN L" Plugin fully initialized.");
 
-    return PLUGIN_VERSION;
+	return PLUGIN_VERSION;
+}
+
+extc void __cdecl ODBG2_Pluginnotify(int code,void *data,ulong parm1,ulong parm2) {
+	if ((parm1 == STAT_PAUSED) && (FIRST_RUN)) {
+		WIN32_FIND_DATA FindFileData;
+		HANDLE hFind = INVALID_HANDLE_VALUE;
+		wchar_t szBuffer[PY_AUTORUN_SIZE];
+
+		hFind = FindFirstFile(PY_AUTORUN_PATH L"\\*.py", &FindFileData);
+		if (hFind == INVALID_HANDLE_VALUE) {
+			Addtolist(0x31337, RED, NAME_PLUGIN L" Invalid file handle. Error is %u", GetLastError());
+		} else {
+			Addtolist(0x31337, RED, NAME_PLUGIN L" Running autorun file: '%s'.", FindFileData.cFileName);
+			swprintf_s(szBuffer, PY_AUTORUN_SIZE, L"%s\\%s", PY_AUTORUN_PATH, FindFileData.cFileName);
+			execute_python_script(szBuffer);
+			while (FindNextFile(hFind, &FindFileData) != 0) {
+				Addtolist(0x31337, RED, NAME_PLUGIN L" Running autorun file: '%s'.", FindFileData.cFileName);
+				swprintf_s(szBuffer, PY_AUTORUN_SIZE, L"%s\\%s", PY_AUTORUN_PATH, FindFileData.cFileName);
+				execute_python_script(szBuffer);
+			}
+			FindClose(hFind);
+		}
+		FIRST_RUN = FALSE;
+	}
 }
 
 extc void __cdecl ODBG2_Plugindestroy(void)
