@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <shlwapi.h>
 #include <python.h>
 
 bool FIRST_RUN = TRUE;
@@ -42,19 +43,27 @@ extc void __cdecl ODBG2_Pluginnotify(int code,void *data,ulong parm1,ulong parm2
 	if ((parm1 == STAT_PAUSED) && (FIRST_RUN)) {
 		WIN32_FIND_DATA FindFileData;
 		HANDLE hFind = INVALID_HANDLE_VALUE;
-		wchar_t szBuffer[PY_AUTORUN_SIZE];
+		wchar_t pyautorunDirectory[200], pyautorunFile[MAX_PATH], pyautorunWildcard[MAX_PATH];
 
-		hFind = FindFirstFile(PY_AUTORUN_PATH L"\\*.py", &FindFileData);
+		// Get PyAutorun Folder Path
+		GetModuleFileName(NULL, pyautorunDirectory, ARRAYSIZE(pyautorunDirectory));
+		PathRemoveFileSpec(pyautorunDirectory);
+		PathAppend(pyautorunDirectory, PY_AUTORUN_PATH);
+		
+		// Create Python Files Wildcard
+		swprintf_s(pyautorunWildcard, MAX_PATH, L"%s\\*.py", pyautorunDirectory);
+
+		hFind = FindFirstFile(pyautorunWildcard, &FindFileData);
 		if (hFind == INVALID_HANDLE_VALUE) {
 			Addtolist(0x31337, RED, NAME_PLUGIN L" Invalid file handle. Error is %u", GetLastError());
 		} else {
 			Addtolist(0x31337, RED, NAME_PLUGIN L" Running autorun file: '%s'.", FindFileData.cFileName);
-			swprintf_s(szBuffer, PY_AUTORUN_SIZE, L"%s\\%s", PY_AUTORUN_PATH, FindFileData.cFileName);
-			execute_python_script(szBuffer);
+			swprintf_s(pyautorunFile, MAX_PATH, L"%s\\%s", pyautorunDirectory, FindFileData.cFileName);
+			execute_python_script(pyautorunFile);
 			while (FindNextFile(hFind, &FindFileData) != 0) {
 				Addtolist(0x31337, RED, NAME_PLUGIN L" Running autorun file: '%s'.", FindFileData.cFileName);
-				swprintf_s(szBuffer, PY_AUTORUN_SIZE, L"%s\\%s", PY_AUTORUN_PATH, FindFileData.cFileName);
-				execute_python_script(szBuffer);
+				swprintf_s(pyautorunFile, MAX_PATH, L"%s\\%s", pyautorunDirectory, FindFileData.cFileName);
+				execute_python_script(pyautorunFile);
 			}
 			FindClose(hFind);
 		}
